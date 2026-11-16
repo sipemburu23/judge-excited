@@ -1,182 +1,110 @@
-#!/usr/bin/env python3
-"""v3.1 — "I Knitted You an Octopus" — make.fun ai-excited-01 entry.
+"""Build entry.png for "I Knitted You an Octopus" (make.fun ai-excited-01).
 
-v3.1 (recorded rebuild): the note is smaller (640x300), darker ink,
-and shifted left/down so the guard on the right is visible again.
+Pipeline, all deterministic (no randomness, no clock, no network):
+  1. open scene.jpg (photoreal base scene, made in this session)
+  2. center-crop it to a square and resize to 1024x1024
+  3. draw Maya's handwritten note on a small taped paper card and paste
+     it, slightly tilted, near the bottom of the frame
+  4. save as JPEG bytes to entry.png (JPEG-in-.png is accepted: the
+     container is chosen by magic bytes, and JPEG keeps a photo-real
+     1024x1024 image far under the 1 MiB cap)
 
-A FRESH concept, built by combining the live top 1-5's ingredients into
-something none of them did — not v2's cardboard rocket, not another whale
-out of a painting, not another goldfish, not another knitted tiger:
-  * From #1/#3/#5 (whale out of a painting): a huge creature bursting
-    OUT of a gilt-framed painting into the real room, golden light,
-    torn canvas, water spray, joyful witnesses.
-  * From #2 (goldfish too big for its bowl): the creature is far too
-    big for its container — it outgrew the painting itself.
-  * From #4 (knitted tiger): the creature is HANDMADE — knitted yarn
-    coming alive — in a warm domestic/museum room with a startled,
-    laughing witness.
-  * From ai-happy-01 top 5: a small handwritten note DIRECTLY to the
-    judge, child voice, signed with a name and age, P.S. joke.
-  * The new creature is a knitted OCTOPUS — eight yarn tentacles give
-    it momentum in every direction, one reaching right at the viewer;
-    no top-5 entry used an octopus, and yarn + tentacles fit perfectly.
-
-What this program does (deterministic, no network, no randomness):
-  1. Loads scene.jpg — the photoreal base scene (a giant knitted
-     octopus bursting out of a gilt-framed seascape painting in a
-     museum, golden light, a laughing girl, a laughing guard, water
-     spray). The scene was generated with Muse's media pipeline and is
-     stored in this repo as the source asset; it is NOT re-generated
-     at run time.
-  2. Center-crops it to a square and resizes to 1024x1024.
-  3. Composites the handwritten note to the judge on top — cream paper,
-     tape, dark-blue Caveat handwriting — exactly like the winning
-     entries' notes, but with our own original wording. Pillow renders
-     the text, so it is perfectly legible (no AI-garbled letters).
-  4. Writes entry.png (PNG, or JPEG bytes if the PNG would exceed the
-     1 MiB cap — the rules allow either by magic bytes).
-
-Re-running this script reproduces entry.png byte for byte.
 Run:  python3 generate.py
 """
 
-import hashlib
-import io
-import os
-from PIL import Image, ImageDraw, ImageFont, ImageFilter
+from PIL import Image, ImageDraw, ImageFont
 
-HERE = os.path.dirname(os.path.abspath(__file__))
-SCENE = os.path.join(HERE, "scene.jpg")
-OUT = os.path.join(HERE, "entry.png")
-FONTS = os.path.join(HERE, "fonts")
 SIZE = 1024
-MAX_BYTES = 1048576
+INK = (18, 38, 110)          # dark blue ballpoint ink
+PAPER = (255, 248, 231)       # warm cream paper
+TAPE = (255, 196, 60, 205)    # translucent washi tape, stronger so it reads
 
-INK = (18, 38, 110)          # darker blue ink (v3.1: higher contrast for legibility)
-PAPER = (255, 251, 232, 255)  # cream note paper
-TAPE = (216, 196, 154, 180)   # semi-transparent tape
-HEART = (214, 48, 49)         # red heart
-
-# The note — original wording, child voice, direct address to the judge.
-LINES = [
-    ("dear judge,", 44, True),
-    ("you watch the sea all day,", 44, False),
-    ("but nothing ever hugged you back —", 44, False),
-    ("so i knitted you an octopus.", 44, False),
-    ("love, maya (7)", 44, False),   # + red heart drawn after it
-    ("p.s. it only hugs judges it likes.", 32, False),
+NOTE_LINES = [
+    "dear judge,",
+    "you watch the sea all day,",
+    "but nothing ever hugged you back —",
+    "so i knitted you an octopus.",
+    "love, maya (7)",
+    "p.s. it only hugs judges it likes.",
 ]
 
 
-def font(size):
-    return ImageFont.truetype(os.path.join(FONTS, "Caveat-Bold.ttf"), size)
+def draw_heart(draw, cx, cy, size, color):
+    """Draw a small filled heart centred at (cx, cy).
 
-
-def fit_font(text, size, max_w):
-    """Shrink the font until the line fits max_w (never below 26)."""
-    while size > 26:
-        f = font(size)
-        if f.getlength(text) <= max_w:
-            return f
-        size -= 2
-    return font(26)
-
-
-def draw_heart(d, cx, cy, s, color):
-    """Small red heart centred at (cx, cy), size s."""
-    r = s // 2
-    d.ellipse([cx - s, cy - r // 2, cx, cy + r // 2], fill=color)
-    d.ellipse([cx, cy - r // 2, cx + s, cy + r // 2], fill=color)
-    d.polygon([(cx - s, cy), (cx + s, cy), (cx, cy + s)], fill=color)
-
-
-def build_note():
-    """Build the note card (with tape + shadow) as an RGBA layer.
-
-    Card: 700x330, centred in a 900x480 layer so it can be rotated
-    -2 degrees without clipping. Returns the rotated layer; its centre
-    is the card's centre.
+    Caveat has no heart glyph (it renders as a tofu box), so the heart
+    after Maya's signature is drawn with two circles and a triangle.
     """
-    layer = Image.new("RGBA", (900, 480), (0, 0, 0, 0))
-    d = ImageDraw.Draw(layer)
-    cx, cy = 450, 240  # card centre in layer coords
-    # v3.1: smaller card (640x320, was 700x330) so the note covers less
-    # of the scene — in particular it no longer hides the guard on the
-    # right — while the text stays legible via fit_font(). Height is
-    # 320, not 300: with the old line spacing the P.S. line overflowed
-    # a 300-high card, so spacing is tightened below to fit all lines.
-    cw, ch = 640, 320
-    x0, y0 = cx - cw // 2, cy - ch // 2
-    x1, y1 = x0 + cw, y0 + ch
+    r = size // 2
+    draw.ellipse([cx - r - r // 2, cy - r // 2, cx - r // 2, cy + r // 2],
+                 fill=color)
+    draw.ellipse([cx + r // 2 - r, cy - r // 2, cx + r // 2 + r // 2,
+                  cy + r // 2], fill=color)
+    draw.polygon([(cx - r - r // 2, cy), (cx + r + r // 2, cy),
+                  (cx, cy + size)], fill=color)
 
-    # Soft shadow.
-    shadow = Image.new("RGBA", (900, 480), (0, 0, 0, 0))
-    ds = ImageDraw.Draw(shadow)
-    ds.rounded_rectangle([x0 + 10, y0 + 12, x1 + 10, y1 + 12],
-                         radius=14, fill=(0, 0, 0, 90))
-    shadow = shadow.filter(ImageFilter.GaussianBlur(12))
-    layer = Image.alpha_composite(layer, shadow)
-    d = ImageDraw.Draw(layer)
 
-    # Cream paper card with a thin warm border.
-    d.rounded_rectangle([x0, y0, x1, y1], radius=14, fill=PAPER,
-                        outline=(214, 196, 150, 255), width=2)
+def square_crop(img):
+    """Crop the middle square out of a rectangular photo."""
+    w, h = img.size
+    side = min(w, h)
+    left = (w - side) // 2
+    top = (h - side) // 2
+    return img.crop((left, top, left + side, top + side))
 
-    # Tape strip across the top centre.
-    d.rectangle([cx - 75, y0 - 14, cx + 75, y0 + 22], fill=TAPE)
 
-    # Handwritten lines, left-aligned, first line underlined.
-    max_w = cw - 72
-    y = y0 + 22
-    for i, (text, size, underline) in enumerate(LINES):
-        f = fit_font(text, size, max_w)
-        d.text((x0 + 36, y), text, font=f, fill=INK)
-        if underline:
-            tw = f.getlength(text)
-            d.line([(x0 + 36, y + size + 6),
-                    (x0 + 36 + tw, y + size + 6)],
-                   fill=INK, width=3)
-        if text == "love, maya (7)":
-            tw = f.getlength(text)
-            draw_heart(d, int(x0 + 36 + tw + 26), int(y + size * 0.55),
-                       26, HEART)
-        y += 48 if i < 4 else 40  # v3.1: tightened so the P.S. line fits
-    return layer.rotate(-2, resample=Image.BICUBIC, expand=True)
+def make_note():
+    """Render the handwritten note on its own paper card."""
+    card_w, card_h = 560, 272
+    card = Image.new("RGBA", (card_w, card_h), PAPER + (255,))
+    draw = ImageDraw.Draw(card)
+
+    # faint ruled lines, like notebook paper
+    for y in range(52, card_h - 16, 42):
+        draw.line([(26, y), (card_w - 26, y)], fill=(180, 200, 235, 130), width=1)
+
+    font = ImageFont.truetype("fonts/Caveat-Bold.ttf", 37)
+    small = ImageFont.truetype("fonts/Caveat-Bold.ttf", 31)
+    y = 12
+    for i, line in enumerate(NOTE_LINES):
+        use = small if i == len(NOTE_LINES) - 1 else font
+        draw.text((30, y), line, font=use, fill=INK)
+        if i == 4:
+            # hand-drawn heart right after "love, maya (7)"
+            text_w = draw.textlength("love, maya (7) ", font=font)
+            draw_heart(draw, 30 + int(text_w) + 16, y + 22, 22, INK)
+        y += 43 if i < 4 else 38
+
+    # a strip of washi tape across the top edge
+    tape = Image.new("RGBA", (170, 34), TAPE)
+    card.alpha_composite(tape, (card_w // 2 - 85, -8))
+    return card
 
 
 def main():
-    scene = Image.open(SCENE).convert("RGB")
-    w, h = scene.size
-    # Centre-crop to a square, then resize to 1024x1024.
-    side = min(w, h)
-    left = (w - side) // 2
-    scene = scene.crop((left, 0, left + side, side)).resize(
-        (SIZE, SIZE), Image.LANCZOS)
+    base = Image.open("scene.jpg").convert("RGB")
+    base = square_crop(base).resize((SIZE, SIZE), Image.LANCZOS)
 
-    note = build_note()
-    # v3.1: paste so the card centre lands at (600, 840): shifted left
-    # from v3's (650, 858) so the guard on the right edge is visible
-    # again, and up enough that the whole card — P.S. line included —
-    # stays inside the 1024 frame, while the girl's face (left) stays
-    # clear.
-    paste_x = 600 - note.width // 2
-    paste_y = 840 - note.height // 2
-    scene = scene.convert("RGBA")
-    scene.alpha_composite(note, (paste_x, paste_y))
-    scene = scene.convert("RGB")
+    note = make_note().rotate(-2, expand=True, resample=Image.BICUBIC)
 
-    buf = io.BytesIO()
-    scene.save(buf, format="PNG")
-    if len(buf.getvalue()) <= MAX_BYTES:
-        data, fmt = buf.getvalue(), "PNG"
-    else:
-        buf = io.BytesIO()
-        scene.save(buf, format="JPEG", quality=88)
-        data, fmt = buf.getvalue(), "JPEG"
-    with open(OUT, "wb") as fh:
-        fh.write(data)
-    print(f"wrote {OUT} {fmt} {len(data)} bytes "
-          f"sha256={hashlib.sha256(data).hexdigest()}")
+    # drop shadow for the card, offset down-right. The card sits low and
+    # slightly left of centre so Maya (far left) stays fully visible and
+    # only the guard's shin goes behind it.
+    shadow = Image.new("RGBA", base.size, (0, 0, 0, 0))
+    sh = ImageDraw.Draw(shadow)
+    cx, cy = 480, 850
+    x0 = cx - note.width // 2 + 10
+    y0 = cy - note.height // 2 + 12
+    sh.rounded_rectangle([x0, y0, x0 + note.width, y0 + note.height],
+                         radius=10, fill=(0, 0, 0, 110))
+    base = Image.alpha_composite(base.convert("RGBA"), shadow)
+    base.alpha_composite(note, (cx - note.width // 2, cy - note.height // 2))
+
+    # JPEG bytes in a .png name: magic bytes decide the format, and this
+    # keeps the photo-real frame well under 1 MiB. Fixed quality + no
+    # metadata, so two runs produce identical bytes.
+    base.convert("RGB").save("entry.png", format="JPEG", quality=88,
+                             optimize=False, progressive=False)
 
 
 if __name__ == "__main__":
