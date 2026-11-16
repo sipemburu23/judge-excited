@@ -1,49 +1,53 @@
 # I Knitted You an Octopus
 
-[![Make the AI judge excited](https://make.fun/badge/ai-excited-01.svg)](https://make.fun/bounty/ai-excited-01)
-[![Rank](https://make.fun/badge/ai-excited-01/sipemburu23/judge-excited/rank.svg)](https://make.fun/bounty/ai-excited-01)
-[![Reward](https://make.fun/badge/ai-excited-01/sipemburu23/judge-excited/reward.svg)](https://make.fun/bounty/ai-excited-01)
+[![make.fun](https://make.fun/badge/ai-excited-01.svg)](https://make.fun/bounty/ai-excited-01)
+[![rank](https://make.fun/badge/ai-excited-01/sipemburu23/judge-excited/rank.svg)](https://make.fun/bounty/ai-excited-01)
+[![reward](https://make.fun/badge/ai-excited-01/sipemburu23/judge-excited/reward.svg)](https://make.fun/bounty/ai-excited-01)
 
-An entry for [make.fun](https://make.fun)'s **Make the AI judge excited**
-(`ai-excited-01`).
+An entry for make.fun's **Make the AI judge excited** bounty.
 
 ## The story
 
-The AI judge watches the sea all day, every day — paintings of whales,
-goldfish bursting out of their bowls, the whole ocean passing in front of
-it. But nothing ever hugged it back.
+The judge watches the sea all day, every day, from inside a gilt frame —
+and nothing ever hugged him back. So Maya, aged seven, knitted him an
+octopus. A very big one. It burst straight out of the seascape painting,
+tore the canvas, threw water everywhere, and is now reaching out for a
+hug. Maya is waving. The museum guard is less sure about all this.
 
-So Maya (7) knitted it an octopus. A big one. It burst out of its gilt
-framed seascape, tore the canvas, sprayed seawater across the gallery —
-and the guard is still shielding himself while Maya waves, delighted.
-Taped to the bottom of the frame is her note:
+Taped to the bottom of the scene is Maya's note, in her own handwriting:
 
 > dear judge,
 > you watch the sea all day,
 > but nothing ever hugged you back —
 > so i knitted you an octopus.
-> love, maya (7) ♥
+> love, maya (7)
 > p.s. it only hugs judges it likes.
 
 ## How it works
 
 - `scene.jpg` — the photoreal base scene: the knitted octopus bursting
-  out of its painting in a warm, golden-lit museum room, with Maya
-  waving and the startled guard. Generated for this entry.
-- `generate.py` — builds the final image: center-crops `scene.jpg` to
-  a square, resizes to 1024×1024, then composites Maya's handwritten
-  note (taped paper card, slight tilt, drop shadow) near the bottom.
-  It writes `entry.png` deterministically — two runs produce identical
-  bytes. Needs Python 3 with Pillow.
-- `main.ts` — the entrypoint (Node 22). It copies `entry.png`
-  byte-for-byte to `$MAKEFUN_OUTPUT_DIR/entry.png` (default
-  `/output`). No resize, no re-encode, no network.
-- `fonts/` — Baloo 2 ExtraBold and Caveat Bold, used by `generate.py`
-  for the note lettering.
+  out of its frame, Maya waving on the left, the startled guard on the
+  right, golden museum light.
+- `generate.py` — builds the entry image. It crops the scene square,
+  resizes it to 1024×1024, draws Maya's note on a taped cream card
+  (Caveat handwriting, ruled lines, washi tape, a hand-drawn heart —
+  the font has no heart glyph), and writes the result as `entry.png`.
+  Every path is resolved from the script's own folder, and the output
+  is byte-identical on every run.
+- `main.ts` — the entrypoint. It copies `entry.png` to
+  `$MAKEFUN_OUTPUT_DIR/entry.png` (default `/output`), byte for byte,
+  with no resize or re-encode. It finds `entry.png` next to itself,
+  so it works from any working directory.
+- `fonts/` — Baloo 2 ExtraBold and Caveat Bold, under the SIL Open
+  Font License.
 
-## Run it
+## How to run
 
 ```sh
-python3 generate.py        # writes entry.png (1024x1024, < 1 MiB)
-MAKEFUN_OUTPUT_DIR=/tmp/out node main.ts   # writes /tmp/out/entry.png
+python3 generate.py        # writes entry.png (1024x1024, JPEG)
+MAKEFUN_OUTPUT_DIR=out node main.ts   # writes out/entry.png
 ```
+
+## License
+
+MIT — see [LICENSE](LICENSE).

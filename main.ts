@@ -1,15 +1,23 @@
-// Entrypoint for "I Knitted You an Octopus" (make.fun ai-excited-01).
+// "I Knitted You an Octopus" — entrypoint.
 //
-// The graded program is deliberately tiny: generate.py already produced
-// the final 1024x1024 image as entry.png, so all this does is copy that
-// file byte-for-byte into the output directory the harness asks for.
-// No resize, no re-encode, no transformation of any kind — the image the
-// judge sees is exactly the image generate.py wrote, and two runs of
-// this program therefore write identical bytes.
-
+// Copies entry.png (which lives next to this file) byte-for-byte to
+// $MAKEFUN_OUTPUT_DIR/entry.png (default /output). No resize, no
+// re-encode, no network.
+//
+// THE IMPORTANT BIT: entry.png is resolved from THIS FILE's own
+// directory (import.meta.url), never from the current working
+// directory. The grader runs `node /bot/main.ts` from some other
+// working directory on a read-only filesystem, so a bare relative
+// path like "entry.png" would not exist there and the run would
+// crash with ENOENT. Resolving from the script location works
+// from anywhere.
 import { copyFileSync, mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
+const here = dirname(fileURLToPath(import.meta.url));
+const source = join(here, "entry.png");
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? "/output";
 mkdirSync(outDir, { recursive: true });
-copyFileSync("entry.png", join(outDir, "entry.png"));
+copyFileSync(source, join(outDir, "entry.png"));
+console.log(`wrote ${join(outDir, "entry.png")}`);
